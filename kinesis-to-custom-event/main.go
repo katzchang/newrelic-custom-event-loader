@@ -98,5 +98,5 @@ func arnToEventType(arn string) string {
 		return defaoultName
 	}
 
-	return strings.ReplaceAll(xx[1], "-", ":")
+	return strings.ReplaceAll(xx[1], "-", "_")
 }
