@@ -2,3 +2,5 @@
 !.git*
 
 samconfig.toml
+kinesis-to-custom-event/kinesis-to-custom-event
+
