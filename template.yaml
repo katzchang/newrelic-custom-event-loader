@@ -14,10 +14,8 @@ Globals:
 Parameters:
   NewRelicInsightsInsertKey:
     Type: String
-    Default: ""
   NewRelicAccountId:
     Type: String
-    Default: ""
 
 Resources:
   TestStream:
@@ -28,15 +26,15 @@ Resources:
 
   KinesisToCustomEventFunction:
     Type: AWS::Serverless::Function
-    Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
-      Variables:
-        NEW_RELIC_INSIGHTS_INSERT_KEY: !Ref NewRelicInsightsInsertKey
-        NEW_RELIC_ACCOUNT_ID: !Ref NewRelicAccountId
     Properties:
       CodeUri: kinesis-to-custom-event/
       Handler: kinesis-to-custom-event
       Runtime: go1.x
       Tracing: Active
+      Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+        Variables:
+          NEW_RELIC_INSIGHTS_INSERT_KEY: !Ref NewRelicInsightsInsertKey
+          NEW_RELIC_ACCOUNT_ID: !Ref NewRelicAccountId
       Events:
         HelloWorldStream:
           Type: Kinesis
