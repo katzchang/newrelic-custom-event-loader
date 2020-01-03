@@ -71,7 +71,7 @@ func handler(event events.KinesisEvent) (string, error) {
 		return "", e
 	}
 
-	msg := fmt.Sprintf(`{"count":%d,"success"%d,"failure":%d`, count, success, failure)
+	msg := fmt.Sprintf(`{"count":%d,"success"%d,"failure":%d}`, count, success, failure)
 	return msg, nil
 }
 
