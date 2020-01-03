@@ -40,7 +40,7 @@ func initialize() {
 	insightInsertKey := os.Getenv("NEW_RELIC_INSIGHTS_INSERT_KEY")
 	accountId := os.Getenv("NEW_RELIC_ACCOUNT_ID")
 	insightClient = insights.NewInsertClient(insightInsertKey, accountId)
-	insightClient.Compression = insights.Deflate
+	insightClient.Compression = insights.Gzip
 
 	// FIXME: set log level
 	insightClient.Logger.Level = logrus.InfoLevel
@@ -59,12 +59,12 @@ func handler(event events.KinesisEvent) (string, error) {
 
 	for _, record := range event.Records {
 		if x, e := mapEvent(record.Kinesis.Data, record.EventSourceArn); e != nil {
-			data = append(data, x)
-			success += 1
-		} else {
 			// TODO: warn扱いにしたい
 			failure += 1
 			log.Errorf("Error: %v\n", e)
+		} else {
+			data = append(data, x)
+			success += 1
 		}
 		count += 1
 	}
@@ -74,6 +74,7 @@ func handler(event events.KinesisEvent) (string, error) {
 	}
 
 	msg := fmt.Sprintf(`{"count":%d,"success"%d,"failure":%d}`, count, success, failure)
+	log.Info(msg)
 	return msg, nil
 }
 
