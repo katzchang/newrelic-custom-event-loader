@@ -12,6 +12,8 @@ import (
 	"github.com/labstack/gommon/log"
 	"github.com/sirupsen/logrus"
 
+	"github.com/jeremywohl/flatten"
+
 	newrelic "github.com/newrelic/go-agent"
 	"github.com/newrelic/go-agent/_integrations/nrlambda"
 	insights "github.com/newrelic/go-insights/client"
@@ -80,11 +82,14 @@ func handler(event events.KinesisEvent) (string, error) {
 // TODO: AttributeNameも仕様を合わせないとだ https://docs.newrelic.com/docs/insights/insights-data-sources/custom-data/insights-custom-data-requirements-limits
 func mapEvent(kinesisData []byte, eventSourceARN string) (map[string]interface{}, error) {
 	var data map[string]interface{}
+
+
 	if err := json.Unmarshal(kinesisData, &data); err != nil {
 		return nil, err
 	}
 	data["eventType"] = arnToEventType(eventSourceARN)
-	return data, nil
+
+	return flatten.Flatten(data, "", flatten.DotStyle)
 }
 
 /**
