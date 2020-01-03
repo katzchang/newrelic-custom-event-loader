@@ -46,6 +46,8 @@ func main() {
 	}
 }
 
+// TODO: まとめて送る
+// TODO: flattenが必要…
 func handler(event events.KinesisEvent) (string, error) {
 	var count = 0
 	for _, record := range event.Records {
@@ -62,17 +64,25 @@ func handler(event events.KinesisEvent) (string, error) {
 	return "", nil
 }
 
-func insertEvent(kinesisData []byte, eventType string) error {
+func insertEvent(kinesisData []byte, arn string) error {
 	var data map[string]interface{}
 	if err := json.Unmarshal(kinesisData, &data); err != nil {
 		return err
 	}
-	data["eventType"] = arnToEventType(eventType)
+	data["eventType"] = arnToEventType(arn)
 	log.Debug(data)
 	if err := insightClient.PostEvent(data); err != nil {
 		return err
 	}
 	return nil
+}
+
+func toJson(kinesisData []byte) (map[string]interface{}, error) {
+	var data map[string]interface{}
+	if err := json.Unmarshal(kinesisData, &data); err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 /**
@@ -91,11 +101,11 @@ TODO: EventTypeがしようと違っても、200 OKになるので注意。イ�
 TODO: AttributeNameも仕様を合わせないとだ https://docs.newrelic.com/docs/insights/insights-data-sources/custom-data/insights-custom-data-requirements-limits
  */
 func arnToEventType(arn string) string {
-	defaoultName := "UnknownKinesisEvent"
+	defaultName := "UnknownKinesisEvent"
 
 	xx := strings.Split(arn, "/")
 	if len(xx) != 2 {
-		return defaoultName
+		return defaultName
 	}
 
 	return strings.ReplaceAll(xx[1], "-", "_")
