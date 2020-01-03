@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
-	//"regexp"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -22,19 +22,7 @@ var (
 )
 
 func main() {
-	insightInsertKey := os.Getenv("NEW_RELIC_INSIGHTS_INSERT_KEY")
-	accountId := os.Getenv("NEW_RELIC_ACCOUNT_ID")
-	insightClient = insights.NewInsertClient(insightInsertKey, accountId)
-
-	// FIXME: set log level here
-	insightClient.Logger.Level = logrus.InfoLevel
-	log.SetLevel(log.INFO)
-
-	for _, pair := range os.Environ() {
-		log.Debug(pair)
-	}
-	log.Debug("insightInsertKey:", insightInsertKey)
-	log.Debug("accountId:", accountId)
+	initialize()
 
 	cfg := nrlambda.NewConfig()
 	app, err := newrelic.NewApplication(cfg)
@@ -46,42 +34,56 @@ func main() {
 	}
 }
 
-// TODO: まとめて送る
-// TODO: flattenが必要…
-func handler(event events.KinesisEvent) (string, error) {
-	var count = 0
-	for _, record := range event.Records {
-		kinesisData := record.Kinesis.Data
-		eventType := record.EventSourceArn
+func initialize() {
+	insightInsertKey := os.Getenv("NEW_RELIC_INSIGHTS_INSERT_KEY")
+	accountId := os.Getenv("NEW_RELIC_ACCOUNT_ID")
+	insightClient = insights.NewInsertClient(insightInsertKey, accountId)
+	insightClient.Compression = insights.Deflate
 
-		if err := insertEvent(kinesisData, eventType); err != nil {
-			// TODO
-			log.Errorf("Error: %v\n", err)
+	// FIXME: set log level
+	insightClient.Logger.Level = logrus.InfoLevel
+	log.SetLevel(log.INFO)
+
+	for _, pair := range os.Environ() {
+		log.Debug(pair)
+	}
+	log.Debug("insightInsertKey:", insightInsertKey)
+	log.Debug("accountId:", accountId)
+}
+
+func handler(event events.KinesisEvent) (string, error) {
+	var count, success, failure = 0, 0, 0
+	var data []map[string]interface{}
+
+	for _, record := range event.Records {
+		if x, e := mapEvent(record.Kinesis.Data, record.EventSourceArn); e != nil {
+			data = append(data, x)
+			success += 1
+		} else {
+			// TODO: warn扱いにしたい
+			failure += 1
+			log.Errorf("Error: %v\n", e)
 		}
 		count += 1
 	}
-	// TODO: 処理した件数と最初のエラー
-	return "", nil
+
+	if e := insightClient.PostEvent(data); e != nil {
+		return "", e
+	}
+
+	msg := fmt.Sprintf(`{"count":%d,"success"%d,"failure":%d`, count, success, failure)
+	return msg, nil
 }
 
-func insertEvent(kinesisData []byte, arn string) error {
-	var data map[string]interface{}
-	if err := json.Unmarshal(kinesisData, &data); err != nil {
-		return err
-	}
-	data["eventType"] = arnToEventType(arn)
-	log.Debug(data)
-	if err := insightClient.PostEvent(data); err != nil {
-		return err
-	}
-	return nil
-}
-
-func toJson(kinesisData []byte) (map[string]interface{}, error) {
+// TODO: flatten https://docs.newrelic.co.jp/docs/insights/insights-data-sources/custom-data/introduction-event-api
+// TODO: EventTypeが仕様と違っても、200 OKになるので注意。イベントは作成されない。 https://docs.newrelic.com/docs/insights/insights-data-sources/custom-data/insights-custom-data-requirements-limits
+// TODO: AttributeNameも仕様を合わせないとだ https://docs.newrelic.com/docs/insights/insights-data-sources/custom-data/insights-custom-data-requirements-limits
+func mapEvent(kinesisData []byte, eventSourceARN string) (map[string]interface{}, error) {
 	var data map[string]interface{}
 	if err := json.Unmarshal(kinesisData, &data); err != nil {
 		return nil, err
 	}
+	data["eventType"] = arnToEventType(eventSourceARN)
 	return data, nil
 }
 
@@ -96,17 +98,11 @@ https://docs.newrelic.com/docs/insights/insights-data-sources/custom-data/insigh
 https://docs.aws.amazon.com/kinesis/latest/APIReference/API_CreateStream.html#API_CreateStream_RequestParameters
 - Length Constraints: Minimum length of 1. Maximum length of 128.
 - Pattern: [a-zA-Z0-9_.-]+
-
-TODO: EventTypeがしようと違っても、200 OKになるので注意。イベントは作成されない。
-TODO: AttributeNameも仕様を合わせないとだ https://docs.newrelic.com/docs/insights/insights-data-sources/custom-data/insights-custom-data-requirements-limits
- */
+*/
 func arnToEventType(arn string) string {
-	defaultName := "UnknownKinesisEvent"
-
 	xx := strings.Split(arn, "/")
 	if len(xx) != 2 {
-		return defaultName
+		return "UnknownKinesisEvent"
 	}
-
 	return strings.ReplaceAll(xx[1], "-", "_")
 }
